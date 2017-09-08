@@ -125,8 +125,9 @@ _git_index_dirs_without_home() {
 # Recursively searches for git repos in $GIT_REPO_DIR
 function _find_git_repos() {
   # Find all unarchived projects
+  local scan_dir=$1
   local IFS=$'\n'
-  for repo in $(find -L "$GIT_REPO_DIR" -maxdepth 3 -name ".git" -type d \! -wholename '*/archive/*'); do
+  for repo in $(find -L "$scan_dir" -maxdepth 5 -name ".git" -type d \! -wholename '*/archive/*'); do
     echo ${repo%/.git}          # Return project folder, with trailing ':'
     _find_git_submodules $repo  # Detect any submodules
   done
@@ -143,9 +144,18 @@ function _find_git_submodules() {
 # Rebuilds index of git repos in $GIT_REPO_DIR.
 function _rebuild_git_index() {
   if [ "$1" != "--silent" ]; then echo -e "== Scanning $GIT_REPO_DIR for git repos & submodules..."; fi
+
   # Get repos from src dir and custom dirs, then sort by basename
+
+  # scan GIT_REPO_DIR and also multiple extra paths in GIT_REPO_DIR_EXTRA
   local IFS=$'\n'
-  for repo in $(echo -e "$(_find_git_repos)\n$(echo $GIT_REPOS | sed "s/:/\\\\n/g")"); do
+  local scanned_repos git_repo_dirs="$GIT_REPO_DIR"
+  if [[ -n "$GIT_REPO_DIR_EXTRA" ]]; then
+    git_repo_dirs="$git_repo_dirs\n$(echo $GIT_REPO_DIR_EXTRA | sed "s/:/\\\\n/g")"
+  fi
+  scanned_repos=$(for g in $(echo -e $git_repo_dirs); do _find_git_repos $g; done)
+
+  for repo in $(echo -e "$scanned_repos\n$(echo $GIT_REPOS | sed "s/:/\\\\n/g")"); do
     echo $(basename $repo | sed "s/ /_/g"):$repo
   done | sort -t ":" -k1,1 | cut -d ":" -f2- >| "$GIT_REPO_DIR/.git_index"
 
